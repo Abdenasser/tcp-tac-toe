@@ -77,11 +77,18 @@ func dispatchBoard(b map[int]string) {
 	}
 }
 
+func isFreePos(pos int, b map[int]string) bool {
+	if b[pos] == colorize("x", "orange") || b[pos] == colorize("o", "cyan") {
+		return false
+	}
+	return true
+}
+
 func play(pos string, b map[int]string, c net.Conn) {
 	fmt.Println("> " + pos)
 	position, _ := strconv.Atoi(pos)
 
-	if c == currentPlayer.Connection && len(players) == 2 {
+	if c == currentPlayer.Connection && len(players) == 2 && isFreePos(position, b) {
 		b[position] = currentPlayer.Symbol
 		switchCurrentPlayer()
 	}
