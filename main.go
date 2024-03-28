@@ -39,14 +39,14 @@ func closeConnection(c net.Conn) {
 	c.Close()
 }
 
-func handleConnection(conn net.Conn, b map[int]string) {
+func handleConnection(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	for {
 		ok := scanner.Scan()
 		if !ok {
 			break
 		}
-		play(scanner.Text(), b, conn)
+		play(scanner.Text(), conn)
 	}
 	closeConnection(conn)
 
@@ -67,10 +67,9 @@ func getScore() string {
 	return "waiting for an oponent to join"
 }
 
-func dispatchBoard(b map[int]string) {
+func dispatchBoard() {
 	for _, p := range players {
-		fmt.Println(b)
-		output := printBoard(b)
+		output := printBoard(originalboard)
 		score := getScore()
 		p.Connection.Write([]byte(output + "\n"))
 		p.Connection.Write([]byte(score + "\n"))
@@ -82,14 +81,14 @@ func dispatchBoard(b map[int]string) {
 	}
 }
 
-func isFreePos(pos int, b map[int]string) bool {
-	if b[pos] == colorize("x", "orange") || b[pos] == colorize("o", "cyan") {
+func isFreePos(pos int) bool {
+	if originalboard[pos] == colorize("x", "orange") || originalboard[pos] == colorize("o", "cyan") {
 		return false
 	}
 	return true
 }
 
-func getWinner(b map[int]string, ps []Player) string {
+func getWinner(ps []Player) string {
 	winCombos := [][]int{
 		{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // verticals
 		{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // horizontals
@@ -97,13 +96,14 @@ func getWinner(b map[int]string, ps []Player) string {
 	}
 
 	for _, combo := range winCombos {
-		if b[combo[0]] == b[combo[1]] && b[combo[1]] == b[combo[2]] {
-			if b[combo[0]] == ps[0].Symbol {
+		if originalboard[combo[0]] == originalboard[combo[1]] && originalboard[combo[1]] == originalboard[combo[2]] {
+			if originalboard[combo[0]] == ps[0].Symbol {
 				ps[0].Score += 1
-			} else {
+			}
+			if originalboard[combo[0]] == ps[1].Symbol {
 				ps[1].Score += 1
 			}
-			return b[combo[0]]
+			return originalboard[combo[0]]
 		}
 	}
 
@@ -119,26 +119,26 @@ func isFull(b map[int]string) bool {
 	return true
 }
 
-func shouldReset(w string, b map[int]string) bool {
-	if w != NoWinner || (w == NoWinner && isFull(b)) {
+func shouldReset(w string) bool {
+	if w != NoWinner || (w == NoWinner && isFull(originalboard)) {
 		return true
 	}
 	return false
 }
 
-func play(pos string, b map[int]string, c net.Conn) {
+func play(pos string, c net.Conn) {
 	fmt.Println("> " + pos)
 	position, _ := strconv.Atoi(pos)
 
-	if c == currentPlayer.Connection && len(players) == 2 && isFreePos(position, b) {
-		b[position] = currentPlayer.Symbol
+	if c == currentPlayer.Connection && len(players) == 2 && isFreePos(position) {
+		originalboard[position] = currentPlayer.Symbol
 		switchCurrentPlayer()
 	}
-	winner := getWinner(b, players)
-	if shouldReset(winner, b) {
-		b = initBoard()
+	winner := getWinner(players)
+	if shouldReset(winner) {
+		originalboard = initBoard()
 	}
-	dispatchBoard(b)
+	dispatchBoard()
 }
 
 func initBoard() map[int]string {
@@ -157,10 +157,12 @@ func printBoard(b map[int]string) string {
 	return output
 }
 
+var originalboard = initBoard()
+
 func main() {
 	listener, _ := net.Listen("tcp", "localhost:8080")
 	fmt.Println("Listening on localhost:8080.")
-	b := initBoard()
+
 	defer listener.Close()
 
 	for {
@@ -176,7 +178,7 @@ func main() {
 			}
 			players = append(players, player)
 			currentPlayer = player
-			go handleConnection(conn, b)
+			go handleConnection(conn)
 		}
 	}
 }
