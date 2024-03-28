@@ -1,4 +1,4 @@
-![a peer to peer TCP tic tac toe game in plain Golang](https://github.com/Abdenasser/tcp-tac-toe/blob/main/imagetcp-tac-toe.jpg?raw=true)
+![a peer to peer TCP tic tac toe game in plain Golang](https://github.com/Abdenasser/tcp-tac-toe/blob/main/tcp-tac-toe.jpg?raw=true)
 
 
 # TCP Tic Tac Toe
