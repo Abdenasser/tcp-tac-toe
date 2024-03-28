@@ -18,6 +18,8 @@ type Player struct {
 var players = []Player{}
 var currentPlayer Player
 
+const NoWinner = "none"
+
 var colors = map[string][2]string{
 	"orange": {"\x1b[34m", "\x1b[0m"},
 	"cyan":   {"\x1b[36m", "\x1b[0m"},
@@ -67,12 +69,15 @@ func getScore() string {
 
 func dispatchBoard(b map[int]string) {
 	for _, p := range players {
+		fmt.Println(b)
 		output := printBoard(b)
 		score := getScore()
 		p.Connection.Write([]byte(output + "\n"))
 		p.Connection.Write([]byte(score + "\n"))
 		if p.Connection == currentPlayer.Connection && len(players) == 2 {
-			p.Connection.Write([]byte("your turn "))
+			p.Connection.Write([]byte("your turn \n"))
+		} else {
+			p.Connection.Write([]byte("oponent's turn \n"))
 		}
 	}
 }
@@ -84,6 +89,43 @@ func isFreePos(pos int, b map[int]string) bool {
 	return true
 }
 
+func getWinner(b map[int]string, ps []Player) string {
+	winCombos := [][]int{
+		{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // verticals
+		{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // horizontals
+		{0, 4, 8}, {2, 4, 6}, // diagonals
+	}
+
+	for _, combo := range winCombos {
+		if b[combo[0]] == b[combo[1]] && b[combo[1]] == b[combo[2]] {
+			if b[combo[0]] == ps[0].Symbol {
+				ps[0].Score += 1
+			} else {
+				ps[1].Score += 1
+			}
+			return b[combo[0]]
+		}
+	}
+
+	return NoWinner
+}
+
+func isFull(b map[int]string) bool {
+	for _, v := range b {
+		if v != colorize("x", "orange") && v != colorize("o", "cyan") {
+			return false
+		}
+	}
+	return true
+}
+
+func shouldReset(w string, b map[int]string) bool {
+	if w != NoWinner || (w == NoWinner && isFull(b)) {
+		return true
+	}
+	return false
+}
+
 func play(pos string, b map[int]string, c net.Conn) {
 	fmt.Println("> " + pos)
 	position, _ := strconv.Atoi(pos)
@@ -92,7 +134,10 @@ func play(pos string, b map[int]string, c net.Conn) {
 		b[position] = currentPlayer.Symbol
 		switchCurrentPlayer()
 	}
-
+	winner := getWinner(b, players)
+	if shouldReset(winner, b) {
+		b = initBoard()
+	}
 	dispatchBoard(b)
 }
 
