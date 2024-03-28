@@ -8,6 +8,7 @@ import (
 )
 
 type Player struct {
+	Index      int
 	Connection net.Conn
 	Symbol     string
 	Score      int
@@ -15,54 +16,68 @@ type Player struct {
 
 // will only handle 2 players for now
 var players = []Player{}
-var lastPlayed = map[string]int{
-	"playerIndex": 0,
+var currentPlayer Player
+
+var colors = map[string][2]string{
+	"orange": {"\x1b[34m", "\x1b[0m"},
+	"cyan":   {"\x1b[36m", "\x1b[0m"},
 }
 
-func handleConnection(conn net.Conn, b map[int]string) {
-	fmt.Printf("Client connected from %v \n", conn.RemoteAddr().String())
-	scanner := bufio.NewScanner(conn)
-	for {
-		// output := printBoard(b)
-		// conn.Write([]byte(output + "\n"))
-		conn.Write([]byte("pick a position please \n"))
-		ok := scanner.Scan()
-		if !ok {
-			break
-		}
-		play(scanner.Text(), b, players, conn)
-	}
-	removePlayer(conn)
-	fmt.Printf("Client at %v disconnected.\n", conn.RemoteAddr().String())
-	conn.Close()
+func colorize(text string, color string) string {
+	return fmt.Sprintf("%s%s%s", colors[color][0], text, colors[color][1])
 }
 
-func play(pos string, b map[int]string, ps []Player, conn net.Conn) {
-	fmt.Println("> " + pos)
-	for _, p := range ps {
-		if lastPlayed["playerIndex"] == 0 {
-			lastPlayed["playerIndex"] = 1
-		} else {
-			lastPlayed["playerIndex"] = 0
-		}
-		player := ps[lastPlayed["playerIndex"]]
-		if p != player {
-			position, _ := strconv.Atoi(pos)
-			b[position] = player.Symbol
-		}
-
-		output := printBoard(b)
-		p.Connection.Write([]byte(output + "\n"))
-	}
-}
-
-func removePlayer(c net.Conn) {
+func closeConnection(c net.Conn) {
 	for i, p := range players {
 		if p.Connection == c {
 			players = append(players[:i], players[i+1:]...)
 			break
 		}
 	}
+	c.Close()
+}
+
+func handleConnection(conn net.Conn, b map[int]string) {
+	scanner := bufio.NewScanner(conn)
+	for {
+		ok := scanner.Scan()
+		if !ok {
+			break
+		}
+		play(scanner.Text(), b, conn)
+	}
+	closeConnection(conn)
+
+}
+
+func switchCurrentPlayer() {
+	if currentPlayer.Index == 0 {
+		currentPlayer = players[1]
+	} else {
+		currentPlayer = players[0]
+	}
+}
+
+func dispatchBoard(b map[int]string) {
+	for _, p := range players {
+		output := printBoard(b)
+		p.Connection.Write([]byte(output + "\n"))
+		if p.Connection == currentPlayer.Connection {
+			p.Connection.Write([]byte("your turn "))
+		}
+	}
+}
+
+func play(pos string, b map[int]string, c net.Conn) {
+	fmt.Println("> " + pos)
+	position, _ := strconv.Atoi(pos)
+
+	if c == currentPlayer.Connection {
+		b[position] = currentPlayer.Symbol
+		switchCurrentPlayer()
+	}
+
+	dispatchBoard(b)
 }
 
 func initBoard() map[int]string {
@@ -83,25 +98,23 @@ func printBoard(b map[int]string) string {
 
 func main() {
 	listener, _ := net.Listen("tcp", "localhost:8080")
-	fmt.Printf("Listening on %s.\n", "localhost:8080")
+	fmt.Println("Listening on localhost:8080.")
 	b := initBoard()
 	defer listener.Close()
 
 	for {
-		conn, err := listener.Accept() // connect using telnet cmd: telnet localhost 8080
-		if err != nil {
-			fmt.Printf("Some connection error: %s\n", err)
-		}
-
+		conn, _ := listener.Accept() // connect using telnet cmd: telnet localhost 8080
 		fmt.Printf("client connected from %v\n", conn.RemoteAddr().String())
 
 		if len(players) < 2 {
 			player := Player{
+				Index:      len(players),
 				Connection: conn,
-				Symbol:     []string{"x", "o"}[len(players)],
+				Symbol:     []string{colorize("x", "orange"), colorize("o", "cyan")}[len(players)],
 				Score:      0,
 			}
 			players = append(players, player)
+			currentPlayer = player
 			go handleConnection(conn, b)
 		}
 	}
