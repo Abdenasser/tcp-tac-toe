@@ -58,11 +58,20 @@ func switchCurrentPlayer() {
 	}
 }
 
+func getScore() string {
+	if len(players) == 2 {
+		return fmt.Sprintf("score: %v:%v - %v:%v", players[0].Symbol, players[0].Score, players[1].Symbol, players[1].Score)
+	}
+	return "waiting for an oponent to join"
+}
+
 func dispatchBoard(b map[int]string) {
 	for _, p := range players {
 		output := printBoard(b)
+		score := getScore()
 		p.Connection.Write([]byte(output + "\n"))
-		if p.Connection == currentPlayer.Connection {
+		p.Connection.Write([]byte(score + "\n"))
+		if p.Connection == currentPlayer.Connection && len(players) == 2 {
 			p.Connection.Write([]byte("your turn "))
 		}
 	}
@@ -72,7 +81,7 @@ func play(pos string, b map[int]string, c net.Conn) {
 	fmt.Println("> " + pos)
 	position, _ := strconv.Atoi(pos)
 
-	if c == currentPlayer.Connection {
+	if c == currentPlayer.Connection && len(players) == 2 {
 		b[position] = currentPlayer.Symbol
 		switchCurrentPlayer()
 	}
