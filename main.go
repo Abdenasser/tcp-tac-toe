@@ -176,21 +176,23 @@ func main() {
 
 	for {
 		conn, _ := listener.Accept()
-		fmt.Printf("client connected from %v\n", conn.RemoteAddr().String())
 
-		if len(game.Players) < 2 {
-			player := Player{
-				Index:      len(game.Players),
-				Connection: conn,
-				Symbol:     []string{colorize("x", "orange"), colorize("o", "cyan")}[len(game.Players)],
-				Score:      0,
-			}
-			game.Players = append(game.Players, player)
-			game.CurrentPlayer = player
-			go handleGameConnection(&game, player)
-		} else {
+		if len(game.Players) == 2 {
+			fmt.Printf("rejecting client connected from %v\n", conn.RemoteAddr().String())
 			conn.Write([]byte("Game is full, try again later!" + "\n"))
 			conn.Close() // only accepting 2 player
+			continue
 		}
+
+		fmt.Printf("client connected from %v\n", conn.RemoteAddr().String())
+		player := Player{
+			Index:      len(game.Players),
+			Connection: conn,
+			Symbol:     []string{colorize("x", "orange"), colorize("o", "cyan")}[len(game.Players)],
+			Score:      0,
+		}
+		game.Players = append(game.Players, player)
+		game.CurrentPlayer = player
+		go handleGameConnection(&game, player)
 	}
 }
