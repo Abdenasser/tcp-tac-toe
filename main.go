@@ -34,7 +34,7 @@ type Game struct {
 
 func (g *Game) String() string {
 	if len(g.Players) != 2 {
-		return "waiting for an oponent to join"
+		return "waiting for an oponent to join \n"
 	}
 	var (
 		board string
@@ -115,18 +115,22 @@ func (p *Player) increaseScore() {
 	p.Score += 1
 }
 
-func (g *Game) dispatch() {
+func (g *Game) dispatchNextTurn() {
+	if len(g.Players) != 2 {
+		return
+	}
 	for _, p := range g.Players {
-		if len(g.Players) != 2 {
-			p.Connection.Write([]byte("wait for an oponent to join" + "\n"))
-			return
-		}
-		p.Connection.Write([]byte(g.String()))
 		if p.Connection == g.CurrentPlayer.Connection {
 			p.Connection.Write([]byte("your turn \n"))
 			continue
 		}
-		p.Connection.Write([]byte("oponent's turn \n"))
+		p.Connection.Write([]byte("your oponent's turn \n"))
+	}
+}
+
+func (g *Game) dispatchGame() {
+	for _, p := range g.Players {
+		p.Connection.Write([]byte(g.String()))
 	}
 }
 
@@ -167,8 +171,8 @@ func handlePlayerPosition(pos int, g *Game, p Player) {
 	if g.shouldResetBoard() {
 		g.resetBoard()
 	}
-
-	g.dispatch()
+	g.dispatchGame()
+	g.dispatchNextTurn()
 }
 
 func main() {
@@ -204,8 +208,8 @@ func main() {
 		game.CurrentPlayer = player
 
 		if len(game.Players) == 2 {
-			game.Players[0].Connection.Write([]byte("Oponent have joined" + "\n"))
-			game.dispatch()
+			game.dispatchGame()
+			game.dispatchNextTurn()
 		}
 
 		go handleGameConnection(&game, player)
