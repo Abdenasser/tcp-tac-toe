@@ -39,7 +39,7 @@ func (g *Game) isFullBoard() bool {
 }
 
 func (g *Game) shouldResetBoard() bool {
-	if g.getWinner() != "none" || (g.getWinner() == "none" && g.isFullBoard()) {
+	if g.getWinner() != "none" || g.isFullBoard() {
 		return true
 	}
 	return false
@@ -74,7 +74,7 @@ func (g *Game) getScore() string {
 }
 
 func (g *Game) isFreePos(pos int) bool {
-	if g.Board[pos] == colorize("x", "orange") || g.Board[pos] == colorize("o", "cyan") {
+	if g.Board[pos] == colorize("x", "orange") || g.Board[pos] == colorize("o", "cyan") || pos > 8 || pos < 0 {
 		return false
 	}
 	return true
