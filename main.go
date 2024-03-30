@@ -7,6 +7,17 @@ import (
 	"strconv"
 )
 
+const xSymbol = "\x1b[34mx\x1b[0m"
+const oSymbol = "\x1b[36mo\x1b[0m"
+
+const noWinner = "none"
+
+var winCombinations = [][]int{
+	{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // verticals
+	{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // horizontals
+	{0, 4, 8}, {2, 4, 6}, // diagonals
+}
+
 type Player struct {
 	Index      int
 	Connection net.Conn
@@ -21,17 +32,27 @@ type Game struct {
 	Watchers      []net.Conn
 }
 
-func (g *Game) printBoard() string {
-	output := ""
-	for i := 0; i < 9; i += 3 {
-		output += fmt.Sprintf("%v | %v | %v\n", g.Board[i], g.Board[i+1], g.Board[i+2])
+func (g *Game) String() string {
+	if len(g.Players) != 2 {
+		return "waiting for an oponent to join"
 	}
-	return output
+	var (
+		board string
+		score string
+	)
+	for i := 0; i < 9; i += 3 {
+		board += fmt.Sprintf("%v | %v | %v\n", g.Board[i], g.Board[i+1], g.Board[i+2])
+	}
+	for _, p := range g.Players {
+		score += fmt.Sprintf("%v:%v ", p.Symbol, p.Score)
+
+	}
+	return fmt.Sprintf("%v \nscore: %v\n", board, score)
 }
 
 func (g *Game) isFullBoard() bool {
 	for _, v := range g.Board {
-		if v != colorize("x", "orange") && v != colorize("o", "cyan") {
+		if v != xSymbol && v != oSymbol {
 			return false
 		}
 	}
@@ -39,10 +60,7 @@ func (g *Game) isFullBoard() bool {
 }
 
 func (g *Game) shouldResetBoard() bool {
-	if g.getWinner() != "none" || g.isFullBoard() {
-		return true
-	}
-	return false
+	return g.getWinnerSymbol() != noWinner || g.isFullBoard()
 }
 
 func (g *Game) canPlayTurn(p Player) bool {
@@ -66,15 +84,8 @@ func (g *Game) switchCurrentPlayer() {
 	}
 }
 
-func (g *Game) getScore() string {
-	if len(g.Players) == 2 {
-		return fmt.Sprintf("score: %v:%v - %v:%v", g.Players[0].Symbol, g.Players[0].Score, g.Players[1].Symbol, g.Players[1].Score)
-	}
-	return "waiting for an oponent to join"
-}
-
 func (g *Game) isFreePos(pos int) bool {
-	if g.Board[pos] == colorize("x", "orange") || g.Board[pos] == colorize("o", "cyan") || pos > 8 || pos < 0 {
+	if g.Board[pos] == xSymbol || g.Board[pos] == oSymbol || pos > 8 || pos < 0 {
 		return false
 	}
 	return true
@@ -84,25 +95,24 @@ func (g *Game) playTurn(p Player, pos int) {
 	g.Board[pos] = p.Symbol
 }
 
-func (g *Game) getWinner() string {
-	winCombos := [][]int{
-		{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // verticals
-		{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // horizontals
-		{0, 4, 8}, {2, 4, 6}, // diagonals
-	}
-
-	for _, combo := range winCombos {
-		if g.Board[combo[0]] == g.Board[combo[1]] && g.Board[combo[1]] == g.Board[combo[2]] {
-			if g.Board[combo[0]] == g.Players[0].Symbol {
-				g.Players[0].Score += 1
-			} else if g.Board[combo[0]] == g.Players[1].Symbol {
-				g.Players[1].Score += 1
-			}
-			return g.Board[combo[0]]
+func (g *Game) getWinnerSymbol() string {
+	for _, c := range winCombinations {
+		if g.Board[c[0]] == g.Board[c[1]] && g.Board[c[1]] == g.Board[c[2]] {
+			return g.Board[c[0]]
 		}
 	}
+	return noWinner
+}
 
-	return "none"
+func (g *Game) getPlayerWithSymbol(s string) *Player {
+	if g.Players[0].Symbol == s {
+		return &g.Players[0]
+	}
+	return &g.Players[1]
+}
+
+func (p *Player) increaseScore() {
+	p.Score += 1
 }
 
 func (g *Game) dispatch() {
@@ -111,22 +121,13 @@ func (g *Game) dispatch() {
 			p.Connection.Write([]byte("wait for an oponent to join" + "\n"))
 			return
 		}
-		p.Connection.Write([]byte(g.printBoard() + "\n" + g.getScore() + "\n"))
+		p.Connection.Write([]byte(g.String()))
 		if p.Connection == g.CurrentPlayer.Connection {
 			p.Connection.Write([]byte("your turn \n"))
 			continue
 		}
 		p.Connection.Write([]byte("oponent's turn \n"))
 	}
-}
-
-var colors = map[string][2]string{
-	"orange": {"\x1b[34m", "\x1b[0m"},
-	"cyan":   {"\x1b[36m", "\x1b[0m"},
-}
-
-func colorize(text string, color string) string {
-	return fmt.Sprintf("%s%s%s", colors[color][0], text, colors[color][1])
 }
 
 func handleGameConnection(g *Game, p Player) {
@@ -145,14 +146,14 @@ func handleGameConnection(g *Game, p Player) {
 
 }
 
-func handlePlayerQuit(g *Game, p Player) {
+func handlePlayerQuit(g *Game, pl Player) {
 	for i, p := range g.Players {
-		if p.Connection == p.Connection {
+		if p.Connection == pl.Connection {
 			g.Players = append(g.Players[:i], g.Players[i+1:]...)
 			break
 		}
 	}
-	p.Connection.Close()
+	pl.Connection.Close()
 }
 
 func handlePlayerPosition(pos int, g *Game, p Player) {
@@ -160,7 +161,11 @@ func handlePlayerPosition(pos int, g *Game, p Player) {
 		g.playTurn(p, pos)
 		g.switchCurrentPlayer()
 	}
-
+	if g.getWinnerSymbol() != noWinner {
+		winnerSymbol := g.getWinnerSymbol()
+		winner := g.getPlayerWithSymbol(winnerSymbol)
+		winner.increaseScore()
+	}
 	if g.shouldResetBoard() {
 		g.resetBoard()
 	}
@@ -194,7 +199,7 @@ func main() {
 		player := Player{
 			Index:      len(game.Players),
 			Connection: conn,
-			Symbol:     []string{colorize("x", "orange"), colorize("o", "cyan")}[len(game.Players)],
+			Symbol:     []string{xSymbol, oSymbol}[len(game.Players)],
 			Score:      0,
 		}
 		game.Players = append(game.Players, player)
