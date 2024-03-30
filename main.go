@@ -136,8 +136,7 @@ func handleGameConnection(g *Game, p Player) {
 	defer handlePlayerQuit(g, p)
 
 	for {
-		ok := scanner.Scan()
-		if !ok {
+		if ok := scanner.Scan(); !ok {
 			break
 		}
 		pos, _ := strconv.Atoi(scanner.Text())
@@ -161,9 +160,8 @@ func handlePlayerPosition(pos int, g *Game, p Player) {
 		g.playTurn(p, pos)
 		g.switchCurrentPlayer()
 	}
-	if g.getWinnerSymbol() != noWinner {
-		winnerSymbol := g.getWinnerSymbol()
-		winner := g.getPlayerWithSymbol(winnerSymbol)
+	if ws := g.getWinnerSymbol(); ws != noWinner {
+		winner := g.getPlayerWithSymbol(ws)
 		winner.increaseScore()
 	}
 	if g.shouldResetBoard() {
