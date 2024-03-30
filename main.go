@@ -107,12 +107,16 @@ func (g *Game) getWinner() string {
 
 func (g *Game) dispatch() {
 	for _, p := range g.Players {
-		p.Connection.Write([]byte(g.printBoard() + "\n" + g.getScore() + "\n"))
-		if p.Connection == g.CurrentPlayer.Connection && len(g.Players) == 2 {
-			p.Connection.Write([]byte("your turn \n"))
-		} else {
-			p.Connection.Write([]byte("oponent's turn \n"))
+		if len(g.Players) != 2 {
+			p.Connection.Write([]byte("wait for an oponent to join" + "\n"))
+			return
 		}
+		p.Connection.Write([]byte(g.printBoard() + "\n" + g.getScore() + "\n"))
+		if p.Connection == g.CurrentPlayer.Connection {
+			p.Connection.Write([]byte("your turn \n"))
+			continue
+		}
+		p.Connection.Write([]byte("oponent's turn \n"))
 	}
 }
 
@@ -195,6 +199,12 @@ func main() {
 		}
 		game.Players = append(game.Players, player)
 		game.CurrentPlayer = player
+
+		if len(game.Players) == 2 {
+			game.Players[0].Connection.Write([]byte("Oponent have joined" + "\n"))
+			game.dispatch()
+		}
+
 		go handleGameConnection(&game, player)
 	}
 }
