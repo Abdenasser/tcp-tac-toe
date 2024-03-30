@@ -127,6 +127,9 @@ func colorize(text string, color string) string {
 
 func handleGameConnection(g *Game, p Player) {
 	scanner := bufio.NewScanner(p.Connection)
+
+	defer handlePlayerQuit(g, p)
+
 	for {
 		ok := scanner.Scan()
 		if !ok {
@@ -135,7 +138,6 @@ func handleGameConnection(g *Game, p Player) {
 		pos, _ := strconv.Atoi(scanner.Text())
 		handlePlayerPosition(pos, g, p)
 	}
-	handlePlayerQuit(g, p)
 
 }
 
