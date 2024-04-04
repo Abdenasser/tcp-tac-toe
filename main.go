@@ -7,8 +7,8 @@ import (
 	"strconv"
 )
 
-const xSymbol = "\x1b[34mx\x1b[0m"
-const oSymbol = "\x1b[36mo\x1b[0m"
+const xSymbol = "\x1b[34mX\x1b[0m"
+const oSymbol = "\x1b[36mO\x1b[0m"
 
 const noWinner = "none"
 
@@ -33,7 +33,7 @@ type Game struct {
 }
 
 func (g *Game) String() string {
-	if len(g.Players) != 2 {
+	if !g.isFullPlaces() {
 		return "waiting for an oponent to join \n"
 	}
 	var (
@@ -59,12 +59,16 @@ func (g *Game) isFullBoard() bool {
 	return true
 }
 
+func (g *Game) isFullPlaces() bool {
+	return len(g.Players) == 2
+}
+
 func (g *Game) shouldResetBoard() bool {
 	return g.getWinnerSymbol() != noWinner || g.isFullBoard()
 }
 
 func (g *Game) canPlayTurn(p Player) bool {
-	if p.Connection == g.CurrentPlayer.Connection && len(g.Players) == 2 {
+	if p.Connection == g.CurrentPlayer.Connection && g.isFullPlaces() {
 		return true
 	}
 	return false
@@ -111,20 +115,20 @@ func (g *Game) getPlayerWithSymbol(s string) *Player {
 	return &g.Players[1]
 }
 
-func (p *Player) increaseScore() {
+func (p *Player) incrementScore() {
 	p.Score += 1
 }
 
 func (g *Game) dispatchNextTurn() {
-	if len(g.Players) != 2 {
+	if !g.isFullPlaces() {
 		return
 	}
 	for _, p := range g.Players {
-		if p.Connection == g.CurrentPlayer.Connection {
-			p.Connection.Write([]byte("your turn \n"))
+		if p.Connection != g.CurrentPlayer.Connection {
+			p.Connection.Write([]byte("oponent's turn! \n"))
 			continue
 		}
-		p.Connection.Write([]byte("your oponent's turn \n"))
+		p.Connection.Write([]byte("your turn: \n"))
 	}
 }
 
@@ -166,13 +170,19 @@ func handlePlayerPosition(pos int, g *Game, p Player) {
 	}
 	if ws := g.getWinnerSymbol(); ws != noWinner {
 		winner := g.getPlayerWithSymbol(ws)
-		winner.increaseScore()
+		winner.incrementScore()
 	}
 	if g.shouldResetBoard() {
 		g.resetBoard()
 	}
 	g.dispatchGame()
 	g.dispatchNextTurn()
+}
+
+func rejectConnection(conn net.Conn) {
+	fmt.Printf("rejecting client connected from %v\n", conn.RemoteAddr().String())
+	conn.Write([]byte("Game is full, try again later!" + "\n"))
+	conn.Close()
 }
 
 func main() {
@@ -190,10 +200,8 @@ func main() {
 	for {
 		conn, _ := listener.Accept()
 
-		if len(game.Players) == 2 {
-			fmt.Printf("rejecting client connected from %v\n", conn.RemoteAddr().String())
-			conn.Write([]byte("Game is full, try again later!" + "\n"))
-			conn.Close() // only accepting 2 player
+		if game.isFullPlaces() {
+			rejectConnection(conn)
 			continue
 		}
 
@@ -207,7 +215,7 @@ func main() {
 		game.Players = append(game.Players, player)
 		game.CurrentPlayer = player
 
-		if len(game.Players) == 2 {
+		if game.isFullPlaces() {
 			game.dispatchGame()
 			game.dispatchNextTurn()
 		}
